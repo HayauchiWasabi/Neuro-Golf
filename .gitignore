@@ -1,0 +1,10 @@
+.DS_Store
+**/.DS_Store
+
+.ipynb_checkpoints/
+.matplotlib-cache/
+__pycache__/
+*.py[cod]
+
+profiles/
+artifacts/official-profiles/
