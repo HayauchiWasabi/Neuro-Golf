@@ -1,0 +1,22 @@
+# Core
+
+- Kaggle NeuroGolf 2026 workspace: build/inspect compact ONNX models for ARC-AGI-style tasks.
+- Top-level map:
+  - `neurogolf-2026/`: competition data; `task001.json`..`task400.json` plus official `neurogolf_utils/neurogolf_utils.py`.
+  - `solution/6406.18/`: baseline/candidate submission folder containing many `taskXXX.onnx` files.
+  - `onnx_work/`: task-specific Python builders, currently `build_task001.py` writing a candidate ONNX under `outputs/gpt_workbench/task001/`.
+  - `scripts/`: reusable local Python modules for scoring and ONNX analysis.
+  - `notebooks/`: exploratory/scoring notebooks: ONNX analysis for GPT, comparing task script outputs, scoring submission folders, building optimized zips, base visualization.
+  - `outputs/`: generated prompts and candidate ONNX artifacts; treat as generated work products.
+  - `profiles/`: ONNX Runtime profiling traces from notebooks/submission builder.
+  - `docs/`: competition overview and NeuroGolf GPT workflow notes.
+- Main local helpers:
+  - `scripts/neurogolf_score.py`: local scorer, cost calculation, candidate folder scoring, best-by-task selection, zip writer/validator.
+  - `scripts/neurogolf_onnx_analysis.py`: task summaries, ONNX node/initializer summaries, GPT prompt generation, example-level model validation.
+- NeuroGolf invariant: each task ONNX consumes `input` float tensor `[1, 10, 30, 30]`; colors are one-hot channels 0..9, outside-grid cells are zero-hot.
+- Submission invariant: `submission.zip` contains direct entries named `task001.onnx`..`task400.onnx`; tasks are optional but at most one ONNX per task.
+- Scoring target: only functionally correct networks score; optimize by reducing `memory + params`, with task score `max(1, 25 - ln(cost))`.
+- Read `mem:tech_stack` for Python/ONNX dependencies and version assumptions.
+- Read `mem:suggested_commands` for useful local commands.
+- Read `mem:conventions` before editing ONNX builders or scoring/analysis helpers.
+- Read `mem:task_completion` before considering a coding/model-building task done.

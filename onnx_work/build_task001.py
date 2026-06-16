@@ -1,17 +1,48 @@
 #!/usr/bin/env python3
 """
-Build task001 ONNX candidate: no shared p3 tensor.
+Build task001 output-redesign memory candidates.
 
-Goal:
-- Reduce memory by avoiding:
-    p3 [1,10,3,3] float32
-- Slice background and foreground directly from input.
-- Keep the original background mask logic:
-    out_bg_mask = Tile(bg_mask, [1,1,3,3]) OR BlockExpand(bg_mask)
-- Do not use banned ops.
+Current best:
+  task001_next_color_pad_short.onnx
+  pass 268/268
+  memory_delta -207
+  params_delta -1
+  cost_delta -208
+  score_delta +0.080477
 
-Output:
-  outputs/gpt_workbench/task001/task001_no_p3_direct_slice.onnx
+Current best graph:
+  background:
+    input -> Slice bg -> Cast BOOL
+          -> Gather/Gather + Tile -> Or -> m
+
+  foreground:
+    input -> Slice fg -> Cast FLOAT16 -> ReduceMax -> cf
+    Pad(cf, channel-before=1) -> co
+
+  output:
+    Where(m, bo, co) -> o9
+    Pad(o9) -> output
+
+New candidates:
+1. task001_out_direct_mask_f16pad.onnx
+   Replace:
+     Where -> out9 -> Pad
+   with:
+     m BOOL -> Cast FLOAT16 -> Pad to 30x30 with value=1 -> Cast BOOL
+     Where(mask30, bo, co) -> output
+
+   Goal:
+     Remove out9 [1,10,9,9] FLOAT16 and final Pad(out9).
+   Risk:
+     Adds mask30 [1,1,30,30], so memory may worsen.
+
+2. task001_out_direct_mask_f32pad.onnx
+   Same as above but mask Pad uses FLOAT instead of FLOAT16.
+   Goal:
+     Check runtime/type behavior. Likely worse memory, but may be valid.
+
+3. task001_out_baseline_short.onnx
+   Rebuild current best short as control.
 """
 
 from pathlib import Path
@@ -21,191 +52,319 @@ import onnx
 from onnx import TensorProto, helper, numpy_helper
 
 
-OUT_PATH = Path("outputs/gpt_workbench/task001/task001_no_p3_direct_slice.onnx")
+OUT_DIR = Path("outputs/gpt_workbench/task001")
 
 
-def make_initializer(name: str, array: np.ndarray) -> onnx.TensorProto:
+def init(name: str, array: np.ndarray) -> onnx.TensorProto:
     return numpy_helper.from_array(array, name=name)
 
 
-def build_model() -> onnx.ModelProto:
+def make_io():
     input_vi = helper.make_tensor_value_info(
         "input",
         TensorProto.FLOAT,
         [1, 10, 30, 30],
     )
-
-    # Base task001 passed with FLOAT16 output, so keep it unchanged.
     output_vi = helper.make_tensor_value_info(
         "output",
         TensorProto.FLOAT16,
         [1, 10, 30, 30],
     )
+    return input_vi, output_vi
 
-    initializers = [
-        make_initializer(
-            "tile_repeats_mask",
-            np.array([1, 1, 3, 3], dtype=np.int64),
-        ),
-        make_initializer(
-            "blk_idx",
-            np.array([0, 0, 0, 1, 1, 1, 2, 2, 2], dtype=np.int64),
-        ),
-        make_initializer(
-            "bg_onehot",
+
+def initializers():
+    return [
+        init("r", np.array([1, 1, 3, 3], dtype=np.int64)),
+        init("i", np.array([0, 0, 0, 1, 1, 1, 2, 2, 2], dtype=np.int64)),
+        init(
+            "bo",
             np.array(
                 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                 dtype=np.float16,
             ).reshape(1, 10, 1, 1),
         ),
-        make_initializer(
-            "fg_bg_zero",
-            np.array([0], dtype=np.float16).reshape(1, 1, 1, 1),
-        ),
     ]
 
-    nodes = [
-        # Background direct slice:
-        # input[:, 0:1, 0:3, 0:3]
+
+def bg_nodes():
+    """
+    Known-good background mask.
+
+    b0 = input[:, 0:1, 0:3, 0:3]
+    b  = BOOL background mask [1,1,3,3]
+
+    t = tiled repeat [1,1,9,9]
+    g = block expand [1,1,9,9]
+    m = t OR g
+    """
+    return [
         helper.make_node(
             "Slice",
-            inputs=["input"],
-            outputs=["p3_bg"],
-            name="slice_bg_direct",
+            ["input"],
+            ["b0"],
+            name="a",
             axes=[1, 2, 3],
             starts=[0, 0, 0],
             ends=[1, 3, 3],
         ),
         helper.make_node(
             "Cast",
-            inputs=["p3_bg"],
-            outputs=["bg3b"],
-            name="cast_bg_to_bool",
+            ["b0"],
+            ["b"],
+            name="b",
             to=TensorProto.BOOL,
         ),
-
-        # Tile repeat path:
-        # 3x3 pattern repeated to 9x9.
         helper.make_node(
             "Tile",
-            inputs=["bg3b", "tile_repeats_mask"],
-            outputs=["pat_bg9"],
-            name="tile_bg_pattern",
+            ["b", "r"],
+            ["t"],
+            name="c",
         ),
-
-        # Block expand path:
-        # Each 3x3 cell expands into 3x3 block.
         helper.make_node(
             "Gather",
-            inputs=["bg3b", "blk_idx"],
-            outputs=["sel_bg_rows"],
-            name="gather_bg_rows_block",
+            ["b", "i"],
+            ["g0"],
+            name="d",
             axis=2,
         ),
         helper.make_node(
             "Gather",
-            inputs=["sel_bg_rows", "blk_idx"],
-            outputs=["sel_bg9"],
-            name="gather_bg_cols_block",
+            ["g0", "i"],
+            ["g"],
+            name="e",
             axis=3,
         ),
-
-        # Final background mask.
         helper.make_node(
             "Or",
-            inputs=["pat_bg9", "sel_bg9"],
-            outputs=["out_bg_mask"],
-            name="or_tile_and_block_bg",
+            ["t", "g"],
+            ["m"],
+            name="f",
         ),
+    ]
 
-        # Foreground direct slice:
-        # input[:, 1:10, 0:3, 0:3]
-        #
-        # Keep the original spirit:
-        # - reduce float32 lifetime by slicing only foreground region
-        # - cast to UINT8 before FLOAT16 as base did
+
+def fg_nodes():
+    """
+    Known-best foreground.
+
+    x  = foreground slice [1,9,3,3] FLOAT
+    h  = foreground slice [1,9,3,3] FLOAT16
+    cf = detected foreground color [1,9,1,1]
+    co = color onehot [1,10,1,1], made by padding channel 0.
+    """
+    return [
         helper.make_node(
             "Slice",
-            inputs=["input"],
-            outputs=["p3_fg_float"],
-            name="slice_fg_direct",
+            ["input"],
+            ["x"],
+            name="g",
             axes=[1, 2, 3],
             starts=[1, 0, 0],
             ends=[10, 3, 3],
         ),
         helper.make_node(
             "Cast",
-            inputs=["p3_fg_float"],
-            outputs=["p3_fg_u8"],
-            name="cast_fg_to_u8",
-            to=TensorProto.UINT8,
-        ),
-        helper.make_node(
-            "Cast",
-            inputs=["p3_fg_u8"],
-            outputs=["p3_fg_f16"],
-            name="cast_fg_to_f16",
+            ["x"],
+            ["h"],
+            name="h",
             to=TensorProto.FLOAT16,
         ),
         helper.make_node(
             "ReduceMax",
-            inputs=["p3_fg_f16"],
-            outputs=["color_fg"],
-            name="reduce_fg_color",
+            ["h"],
+            ["cf"],
+            name="j",
             axes=[2, 3],
             keepdims=1,
         ),
         helper.make_node(
-            "Concat",
-            inputs=["fg_bg_zero", "color_fg"],
-            outputs=["color_onehot"],
-            name="concat_color_onehot",
-            axis=1,
+            "Pad",
+            ["cf"],
+            ["co"],
+            name="k",
+            mode="constant",
+            pads=[0, 1, 0, 0, 0, 0, 0, 0],
+            value=0.0,
         ),
+    ]
+
+
+def output_baseline_short():
+    """
+    Current best output:
+      Where -> out9
+      Pad out9 -> output
+    """
+    return [
         helper.make_node(
             "Where",
-            inputs=["out_bg_mask", "bg_onehot", "color_onehot"],
-            outputs=["out9"],
-            name="where_bg_or_fg",
+            ["m", "bo", "co"],
+            ["o9"],
+            name="l",
         ),
         helper.make_node(
             "Pad",
-            inputs=["out9"],
-            outputs=["output"],
-            name="pad_to_30x30",
+            ["o9"],
+            ["output"],
+            name="m",
             mode="constant",
             pads=[0, 0, 0, 0, 0, 0, 21, 21],
             value=0.0,
         ),
     ]
 
+
+def output_direct_mask_f16pad():
+    """
+    Candidate 1:
+      m BOOL [1,1,9,9]
+        -> Cast FLOAT16
+        -> Pad to [1,1,30,30] with value=1
+        -> Cast BOOL
+      Where(mask30, bo, co) -> output
+
+    Outside the 9x9 area must be background.
+    Since Where(condition, bo, co), condition=True selects background.
+    Therefore mask padding value must be True.
+    """
+    return [
+        helper.make_node(
+            "Cast",
+            ["m"],
+            ["mf"],
+            name="l",
+            to=TensorProto.FLOAT16,
+        ),
+        helper.make_node(
+            "Pad",
+            ["mf"],
+            ["mp"],
+            name="m",
+            mode="constant",
+            pads=[0, 0, 0, 0, 0, 0, 21, 21],
+            value=1.0,
+        ),
+        helper.make_node(
+            "Cast",
+            ["mp"],
+            ["mb"],
+            name="n",
+            to=TensorProto.BOOL,
+        ),
+        helper.make_node(
+            "Where",
+            ["mb", "bo", "co"],
+            ["output"],
+            name="o",
+        ),
+    ]
+
+
+def output_direct_mask_f32pad():
+    """
+    Candidate 2:
+    Same as f16pad, but use FLOAT32 mask pad.
+
+    This may be worse, but helps check whether FLOAT16 Pad/Cast behavior
+    is treated differently by runtime/evaluator.
+    """
+    return [
+        helper.make_node(
+            "Cast",
+            ["m"],
+            ["mf"],
+            name="l",
+            to=TensorProto.FLOAT,
+        ),
+        helper.make_node(
+            "Pad",
+            ["mf"],
+            ["mp"],
+            name="m",
+            mode="constant",
+            pads=[0, 0, 0, 0, 0, 0, 21, 21],
+            value=1.0,
+        ),
+        helper.make_node(
+            "Cast",
+            ["mp"],
+            ["mb"],
+            name="n",
+            to=TensorProto.BOOL,
+        ),
+        helper.make_node(
+            "Where",
+            ["mb", "bo", "co"],
+            ["output"],
+            name="o",
+        ),
+    ]
+
+
+def build_model(name: str, output_builder):
+    input_vi, output_vi = make_io()
+
+    nodes = []
+    nodes += bg_nodes()
+    nodes += fg_nodes()
+    nodes += output_builder()
+
     graph = helper.make_graph(
         nodes=nodes,
-        name="task001_no_p3_direct_slice",
+        name=name,
         inputs=[input_vi],
         outputs=[output_vi],
-        initializer=initializers,
+        initializer=initializers(),
     )
 
     model = helper.make_model(
         graph,
         opset_imports=[helper.make_operatorsetid("", 9)],
-        producer_name="gpt_task001_no_p3_direct_slice",
+        producer_name=name,
     )
     model.ir_version = 8
     return model
 
 
-def main() -> None:
-    model = build_model()
+def save_model(model: onnx.ModelProto, filename: str):
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUT_DIR / filename
+
     onnx.checker.check_model(model)
+    onnx.save(model, path)
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    onnx.save(model, OUT_PATH)
+    print(f"saved: {path}")
+    print(f"  nodes: {len(model.graph.node)}")
+    print(f"  initializers: {len(model.graph.initializer)}")
+    print()
 
-    print(f"saved: {OUT_PATH}")
-    print(f"nodes: {len(model.graph.node)}")
-    print(f"initializers: {len(model.graph.initializer)}")
+
+def main():
+    candidates = [
+        (
+            "task001_out_baseline_short",
+            output_baseline_short,
+            "task001_out_baseline_short.onnx",
+        ),
+        (
+            "task001_out_direct_mask_f16pad",
+            output_direct_mask_f16pad,
+            "task001_out_direct_mask_f16pad.onnx",
+        ),
+        (
+            "task001_out_direct_mask_f32pad",
+            output_direct_mask_f32pad,
+            "task001_out_direct_mask_f32pad.onnx",
+        ),
+    ]
+
+    for name, builder, filename in candidates:
+        try:
+            model = build_model(name, builder)
+            save_model(model, filename)
+        except Exception as e:
+            print(f"failed: {filename}: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

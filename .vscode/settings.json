@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "*.onnx": "binary",
+    "outputs/gpt_workbench/task*/task*": "binary"
+  }
+}
