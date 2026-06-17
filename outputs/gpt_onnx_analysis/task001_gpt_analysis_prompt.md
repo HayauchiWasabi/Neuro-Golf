@@ -26,42 +26,39 @@ Task summary:
 # ONNX analysis: task001.onnx
 
 ## Basic
-- path: /Users/kaiikeda/Programming/Kaggle/Neuro Golf/solution/6406.18/task001.onnx
-- filesize: 1172 bytes
+- path: /Users/kaiikeda/Programming/Kaggle/Neuro Golf/solution/6410.88/task001.onnx
+- filesize: 872 bytes
 - ir_version: 8
 - opset_imports: [{'domain': '', 'version': 9}]
 - inputs: [{'name': 'input', 'elem_type': 'FLOAT', 'shape': [1, 10, 30, 30]}]
 - outputs: [{'name': 'output', 'elem_type': 'FLOAT16', 'shape': [1, 10, 30, 30]}]
-- nodes: 14
-- initializers: 4
-- op_counts: {'Cast': 3, 'Concat': 1, 'Gather': 2, 'Or': 1, 'Pad': 1, 'ReduceMax': 1, 'Slice': 3, 'Tile': 1, 'Where': 1}
+- nodes: 12
+- initializers: 3
+- op_counts: {'Cast': 2, 'Gather': 2, 'Or': 1, 'Pad': 2, 'ReduceMax': 1, 'Slice': 2, 'Tile': 1, 'Where': 1}
 
 ## Score
 - status: ok
-- memory: 2666
-- params: 24
-- cost: 2690.0
-- score: 17.102703527404117
+- memory: 2459
+- params: 23
+- cost: 2482.0
+- score: 17.18318003423545
 - score_error: 
 
 ## Initializers
-- tile_repeats_mask: dtype=INT64, dims=[4], numel=4, bytes=32, sample=[1, 1, 3, 3]
-- blk_idx: dtype=INT64, dims=[9], numel=9, bytes=72, sample=[0, 0, 0, 1, 1, 1, 2, 2, 2]
-- bg_onehot: dtype=FLOAT16, dims=[1, 10, 1, 1], numel=10, bytes=20, sample=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-- fg_bg_zero: dtype=FLOAT16, dims=[1, 1, 1, 1], numel=1, bytes=2, sample=[0.0]
+- r: dtype=INT64, dims=[4], numel=4, bytes=32, sample=[1, 1, 3, 3]
+- i: dtype=INT64, dims=[9], numel=9, bytes=72, sample=[0, 0, 0, 1, 1, 1, 2, 2, 2]
+- bo: dtype=FLOAT16, dims=[1, 10, 1, 1], numel=10, bytes=20, sample=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ## Nodes
-- #0 Slice name=20 inputs=['input'] outputs=['p3'] attrs={'axes': [2, 3], 'ends': [3, 3], 'starts': [0, 0]}
-- #1 Slice name=21 inputs=['p3'] outputs=['p3_bg'] attrs={'axes': [1], 'ends': [1], 'starts': [0]}
-- #2 Cast name=25 inputs=['p3_bg'] outputs=['bg3b'] attrs={'to': 9}
-- #3 Tile name=26 inputs=['bg3b', 'tile_repeats_mask'] outputs=['pat_bg9'] attrs={}
-- #4 Gather name=27 inputs=['bg3b', 'blk_idx'] outputs=['sel_bg_rows'] attrs={'axis': 2}
-- #5 Gather name=28 inputs=['sel_bg_rows', 'blk_idx'] outputs=['sel_bg9'] attrs={'axis': 3}
-- #6 Or name=29 inputs=['pat_bg9', 'sel_bg9'] outputs=['out_bg_mask'] attrs={}
-- #7 Cast name=foldcast_3_0 inputs=['p3'] outputs=['p3__f16_3_0'] attrs={'to': 2}
-- #8 Slice name=22 inputs=['p3__f16_3_0'] outputs=['p3_fg__h16'] attrs={'axes': [1], 'ends': [10], 'starts': [1]}
-- #9 Cast name=p3_fg__h16_u8up inputs=['p3_fg__h16'] outputs=['p3_fg__h16_u8tof16'] attrs={'to': 10}
-- #10 ReduceMax name=23 inputs=['p3_fg__h16_u8tof16'] outputs=['color_fg'] attrs={'axes': [2, 3], 'keepdims': 1}
-- #11 Concat name=24 inputs=['fg_bg_zero', 'color_fg'] outputs=['color_onehot'] attrs={'axis': 1}
-- #12 Where name=30 inputs=['out_bg_mask', 'bg_onehot', 'color_onehot'] outputs=['out9'] attrs={}
-- #13 Pad name=31 inputs=['out9'] outputs=['output'] attrs={'mode': 'constant', 'pads': [0, 0, 0, 0, 0, 0, 21, 21], 'value': 0.0}
+- #0 Slice name=a inputs=['input'] outputs=['b0'] attrs={'axes': [1, 2, 3], 'ends': [1, 3, 3], 'starts': [0, 0, 0]}
+- #1 Cast name=b inputs=['b0'] outputs=['b'] attrs={'to': 9}
+- #2 Tile name=c inputs=['b', 'r'] outputs=['t'] attrs={}
+- #3 Gather name=d inputs=['b', 'i'] outputs=['g0'] attrs={'axis': 2}
+- #4 Gather name=e inputs=['g0', 'i'] outputs=['g'] attrs={'axis': 3}
+- #5 Or name=f inputs=['t', 'g'] outputs=['m'] attrs={}
+- #6 Slice name=g inputs=['input'] outputs=['x'] attrs={'axes': [1, 2, 3], 'ends': [10, 3, 3], 'starts': [1, 0, 0]}
+- #7 Cast name=h inputs=['x'] outputs=['h'] attrs={'to': 10}
+- #8 ReduceMax name=j inputs=['h'] outputs=['cf'] attrs={'axes': [2, 3], 'keepdims': 1}
+- #9 Pad name=k inputs=['cf'] outputs=['co'] attrs={'mode': 'constant', 'pads': [0, 1, 0, 0, 0, 0, 0, 0], 'value': 0.0}
+- #10 Where name=l inputs=['m', 'bo', 'co'] outputs=['o9'] attrs={}
+- #11 Pad name=m inputs=['o9'] outputs=['output'] attrs={'mode': 'constant', 'pads': [0, 0, 0, 0, 0, 0, 21, 21], 'value': 0.0}
