@@ -1,15 +1,11 @@
 # Conventions
 
-- Python style in repo: `from __future__ import annotations` in reusable scripts, `Path` for paths, type hints on helpers, small pure functions, minimal comments except for ONNX graph intent.
-- Reusable helper modules are function-only scripts with no CLI parser; preserve importability and avoid notebook-only dependencies in `scripts/neurogolf_score.py` and `scripts/neurogolf_onnx_analysis.py`.
-- ONNX builders are task-specific executable scripts under `onnx_work/`; they construct graphs explicitly with `onnx.helper.make_node` and write generated models under `outputs/gpt_workbench/<task>/`.
-- ONNX graph invariants for generated candidates:
-  - Single input named `input`, single output named `output`.
-  - Static tensor shapes only.
-  - Target input shape `[1, 10, 30, 30]`.
-  - Avoid banned ops: `Loop`, `Scan`, `NonZero`, `Unique`, `Script`, `Function`, `Compress`; also avoid Sequence operations.
-  - Avoid custom domains, subgraphs, model functions, initializer names colliding with graph input/output names.
-  - Keep each ONNX file under 1.44 MiB.
-- Scoring-sensitive edits: cost is `memory + params`; removing initializers, intermediate tensors, value_info footprint, casts, pads, and redundant nodes can matter even if runtime outputs are unchanged.
-- Correctness-sensitive edits: validate against `train`, `test`, and `arc-gen` examples before keeping a candidate; example outputs must match one-hot tensors exactly after thresholding in local analysis helper.
-- Generated artifacts in `outputs/`, `profiles/`, and `solution/` may be large/binary; avoid broad rewrites or cleanup unless the user asks.
+- Prefer editing reusable Python helpers in `scripts/` or task builders in `onnx_work/`; notebooks are exploratory and may contain copied older logic.
+- Task builders construct ONNX directly with `onnx.helper`/`numpy_helper`; small helper functions for tensor initializers (`t_i64`, `t_f16`, `vec_i64`, etc.) are normal local style.
+- Builder outputs should land in generated locations such as `outputs/gpt_workbench/<task>/`; final candidate folders live under `solution/<score-or-candidate>/` with direct `taskXXX.onnx` names.
+- ONNX graph naming matters to scoring: `sanitize_model` rewrites internal names to safe names but preserves `input` and `output`; avoid names containing `kernel_time`.
+- Use static shapes everywhere. The local scorer rejects dynamic dims, graph attributes/subgraphs, sequences, multiple inputs/outputs, functions, and non-default domains.
+- Cost optimization is `memory + params`; builders commonly choose FLOAT16 intermediate/output tensors and compact initializers/names to reduce cost and file size.
+- Scoring statuses considered usable are `ok` and `ok_static`; `ok_static` means runtime profiling failed but static memory calculation succeeded, so preserve the error string for context.
+- Do not treat `outputs/` and notebooks as authoritative source without checking freshness; they are frequently generated or modified during experiments.
+- Existing docs may be Japanese/English mixed; code identifiers are English, while exploratory comments/docstrings can be Japanese in task-specific builders.

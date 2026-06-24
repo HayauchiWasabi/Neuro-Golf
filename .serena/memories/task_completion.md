@@ -1,11 +1,7 @@
 # Task Completion
 
-- For Python source edits, run at minimum:
-  - `python3 -m py_compile scripts/neurogolf_score.py scripts/neurogolf_onnx_analysis.py onnx_work/build_task001.py`
-- For edits to a task builder, run the builder, then validate the produced ONNX:
-  - `python3 onnx_work/build_task001.py`
-  - `PYTHONPATH=scripts python3 -c "from neurogolf_onnx_analysis import run_model_on_examples; print(run_model_on_examples('outputs/gpt_workbench/task001/task001_candidate.onnx', 'task001', 'neurogolf-2026'))"`
-  - `PYTHONPATH=scripts python3 -c "from neurogolf_score import score_model_file; print(score_model_file('outputs/gpt_workbench/task001/task001_candidate.onnx', 'neurogolf-2026'))"`
-- For submission-folder or zip-selection changes, score/validate with `scripts/neurogolf_score.py` helpers: `score_submission_folder`, `select_best_by_task`, `write_submission_zip`, `validate_submission_zip` as applicable.
-- Completion criterion for ONNX optimization work: report example validation status, score/cost/memory/params, generated file path, and whether a candidate beats the baseline being compared.
-- If dependencies are missing locally (`onnx`, `onnxruntime`, etc.), state that verification could not run and include the exact failed command/error.
+- For ONNX builder changes, run the relevant builder, e.g. `python3 onnx_work/task001.py`, and confirm expected files are emitted under `outputs/gpt_workbench/<task>/`.
+- Score each changed/generated model with `score_model_file` using `PYTHONPATH=scripts` and `data_dir='neurogolf-2026'`; require status `ok` or intentionally accepted `ok_static`.
+- Run `run_model_on_examples` for the affected task/model to check `train`, `test`, and `arc-gen` public examples; investigate any `fail` or runtime `error` rows.
+- If assembling or modifying a candidate folder/zip, use `score_submission_folder`, `select_best_by_task`/`write_submission_zip` as appropriate, then `validate_submission_zip`.
+- Always check `git status --short` before final response; generated notebooks/outputs may already be dirty and should not be reverted unless the user explicitly asks.

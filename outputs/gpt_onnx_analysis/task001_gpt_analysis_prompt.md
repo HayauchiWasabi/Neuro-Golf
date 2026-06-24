@@ -26,7 +26,7 @@ Task summary:
 # ONNX analysis: task001.onnx
 
 ## Basic
-- path: /Users/kaiikeda/Programming/Kaggle/Neuro Golf/solution/6410.88/task001.onnx
+- path: /Users/kaiikeda/Programming/Kaggle/Neuro Golf/solution/6411.33/task001.onnx
 - filesize: 872 bytes
 - ir_version: 8
 - opset_imports: [{'domain': '', 'version': 9}]

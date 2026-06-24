@@ -1,15 +1,15 @@
 # Tech Stack
 
-- Language: Python 3.11.9 observed locally on Darwin.
-- No `requirements.txt`, `pyproject.toml`, `environment.yml`, `setup.py`, or `Makefile` currently present.
-- Required runtime libraries inferred from imports:
+- Python workspace; no `pyproject.toml`, `requirements.txt`, or Makefile is present, so dependencies are implicit.
+- Core runtime packages used by scripts/builders:
   - `numpy`
   - `onnx`
   - `onnxruntime`
-  - `onnx_tool` for official Kaggle utility/notebook flows
-  - `matplotlib`, `IPython` for visualization/notebook utility flows
-- Local scripts use standard library modules only beyond the ONNX/Numpy stack: `json`, `math`, `pathlib`, `tempfile`, `zipfile`, `collections.Counter`.
-- ONNX model builders use `onnx.helper`, `onnx.TensorProto`, `onnx.numpy_helper`; current task builder sets `ir_version = 8` and opset 9 for task001 candidate.
-- Official utility defaults in `neurogolf-2026/neurogolf_utils/neurogolf_utils.py`: grid shape `[1, 10, 30, 30]`, data type float, official `_IR_VERSION = 10`, default opset 10.
-- Local scorer disables ONNX Runtime graph optimization while scoring/profiling: `ORT_DISABLE_ALL`; do not assume optimized ORT graph behavior when comparing costs.
-- Local imports from `scripts/` are plain module imports, not packaged; one-off commands often need `PYTHONPATH=scripts` when importing `neurogolf_score` or `neurogolf_onnx_analysis` from repo root.
+  - `onnx.numpy_helper` / `onnx.helper` / `TensorProto`
+- Competition utility additionally imports:
+  - `onnx_tool`
+  - `matplotlib`
+  - `IPython.display`
+- Standard-library usage is lightweight: `pathlib`, `json`, `math`, `collections.Counter`, `tempfile`, `zipfile`.
+- Notebooks use Python 3 / IPython kernels; reusable logic should usually move into `scripts/` or `onnx_work/` instead of staying notebook-only.
+- Local scorer uses `onnxruntime.SessionOptions` with `ORT_DISABLE_ALL` graph optimizations when profiling or checking public examples, matching the intent to measure authored graphs rather than optimized runtime rewrites.

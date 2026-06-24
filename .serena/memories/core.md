@@ -1,22 +1,19 @@
 # Core
 
-- Kaggle NeuroGolf 2026 workspace: build/inspect compact ONNX models for ARC-AGI-style tasks.
-- Top-level map:
-  - `neurogolf-2026/`: competition data; `task001.json`..`task400.json` plus official `neurogolf_utils/neurogolf_utils.py`.
-  - `solution/6406.18/`: baseline/candidate submission folder containing many `taskXXX.onnx` files.
-  - `onnx_work/`: task-specific Python builders, currently `build_task001.py` writing a candidate ONNX under `outputs/gpt_workbench/task001/`.
-  - `scripts/`: reusable local Python modules for scoring and ONNX analysis.
-  - `notebooks/`: exploratory/scoring notebooks: ONNX analysis for GPT, comparing task script outputs, scoring submission folders, building optimized zips, base visualization.
-  - `outputs/`: generated prompts and candidate ONNX artifacts; treat as generated work products.
-  - `profiles/`: ONNX Runtime profiling traces from notebooks/submission builder.
-  - `docs/`: competition overview and NeuroGolf GPT workflow notes.
-- Main local helpers:
-  - `scripts/neurogolf_score.py`: local scorer, cost calculation, candidate folder scoring, best-by-task selection, zip writer/validator.
-  - `scripts/neurogolf_onnx_analysis.py`: task summaries, ONNX node/initializer summaries, GPT prompt generation, example-level model validation.
-- NeuroGolf invariant: each task ONNX consumes `input` float tensor `[1, 10, 30, 30]`; colors are one-hot channels 0..9, outside-grid cells are zero-hot.
-- Submission invariant: `submission.zip` contains direct entries named `task001.onnx`..`task400.onnx`; tasks are optional but at most one ONNX per task.
-- Scoring target: only functionally correct networks score; optimize by reducing `memory + params`, with task score `max(1, 25 - ln(cost))`.
-- Read `mem:tech_stack` for Python/ONNX dependencies and version assumptions.
-- Read `mem:suggested_commands` for useful local commands.
-- Read `mem:conventions` before editing ONNX builders or scoring/analysis helpers.
-- Read `mem:task_completion` before considering a coding/model-building task done.
+- Kaggle NeuroGolf 2026 workspace for building tiny ONNX models for ARC-style `task001`..`task400` transformations.
+- Source map:
+  - `neurogolf-2026/taskXXX.json`: competition task data; each JSON has `train`, `test`, and `arc-gen` example pairs.
+  - `neurogolf-2026/neurogolf_utils/neurogolf_utils.py`: downloaded competition utility; keep as reference/validator-style code, not primary app source.
+  - `scripts/neurogolf_score.py`: reusable local scoring helpers for ONNX files/folders/candidate selection/zip validation.
+  - `scripts/neurogolf_onnx_analysis.py`: task/model summarization, GPT prompt generation, and public-example execution helpers.
+  - `onnx_work/`: task-specific ONNX builders/experiments; builders usually emit candidate `.onnx` files under `outputs/gpt_workbench/<task>/`.
+  - `notebooks/`: exploratory workflows; scripts are cleaner reusable versions of notebook scoring/analysis logic.
+  - `solution/<candidate>/`: candidate submission folders containing direct `taskXXX.onnx` files.
+  - `outputs/`: generated score CSVs, analysis prompts, and workbench ONNX artifacts; often dirty/generated.
+- Competition invariants:
+  - Model input name `input`, shape `[1, 10, 30, 30]`, float32 one-hot color channels 0..9; outside the grid is zero-hot.
+  - Model output name `output`, shape `[1, 10, 30, 30]`; local builders often use FLOAT16 output to reduce memory.
+  - ONNX must have static tensor shapes, one input, one output, default/ai.onnx opsets only, no functions/subgraphs.
+  - Banned ops include `Loop`, `Scan`, `NonZero`, `Unique`, `Script`, `Function`, `Compress`; sequence ops are treated as invalid locally.
+  - Per-file ONNX size limit is 1.44 MiB.
+- Read `mem:tech_stack` for dependencies/runtime assumptions, `mem:suggested_commands` for practical commands, `mem:conventions` for builder/scoring patterns, and `mem:task_completion` for done checks.
